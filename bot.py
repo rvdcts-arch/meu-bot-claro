@@ -670,24 +670,24 @@ def _processar_bloco(chat_id, bloco, silencioso=False):
 
     links = puxar_links(cookie)
 
-    if not links:
-        if not silencioso and ag:
-            bot.edit_message_text(f" `{credencial}`\n Cookie inválido ou expirado.",
-                                  chat_id=chat_id, message_id=ag.message_id, parse_mode="Markdown")
-        return {"ok": False, "credencial": credencial, "motivo": "cookie inválido ou expirado"}
-
     conta_id    = salvar_conta(credencial, links)
     plataformas = [i["plataforma"] for i in links]
     if not silencioso and ag:
         now = datetime.now().strftime("%d/%m %H:%M")
-        mu = types.InlineKeyboardMarkup(row_width=2)
-        for i in links:
-            e, c = _emoji_curto(i["plataforma"])
-            mu.add(types.InlineKeyboardButton(f"{e} {c}", url=i["link"]))
-        bot.edit_message_text(
-            f"✅ *{len(links)} link(s)*\n`{credencial}`  {now}",
-            chat_id=chat_id, message_id=ag.message_id,
-            parse_mode="Markdown", reply_markup=mu)
+        if not links:
+            bot.edit_message_text(
+                f"⚠️ *0 links encontrados*\n`{credencial}`  {now}\n\nCookie salvo, mas nenhum pacote add-on ativo.",
+                chat_id=chat_id, message_id=ag.message_id,
+                parse_mode="Markdown")
+        else:
+            mu = types.InlineKeyboardMarkup(row_width=2)
+            for i in links:
+                e, c = _emoji_curto(i["plataforma"])
+                mu.add(types.InlineKeyboardButton(f"{e} {c}", url=i["link"]))
+            bot.edit_message_text(
+                f"✅ *{len(links)} link(s)*\n`{credencial}`  {now}",
+                chat_id=chat_id, message_id=ag.message_id,
+                parse_mode="Markdown", reply_markup=mu)
     return {"ok": True, "credencial": credencial, "conta_id": conta_id,
             "plataformas": plataformas, "count": len(links)}
 
