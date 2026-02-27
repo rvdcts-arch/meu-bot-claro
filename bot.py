@@ -269,7 +269,7 @@ def teclado_links_conta(conta_id, plataformas):
 def _enviar_bloco_db(chat_id, rows, prefixo):
     grupos = {}
     for (cred, plat, link) in rows:
-        grupos.setdefault(plat, []).append(link)
+        grupos.setdefault(plat, []).append(f"{cred} > {link}")
 
     for plat in PARCEIROS:
         if plat not in grupos:
