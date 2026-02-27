@@ -135,6 +135,27 @@ def limpar_dia(data_str):
     con.commit()
     con.close()
 
+def buscar_todos_links_mes(mes_str):
+    """mes_str no formato 'YYYY-MM'"""
+    con = sqlite3.connect(DB_FILE)
+    cur = con.cursor()
+    cur.execute("""
+        SELECT c.credencial, l.plataforma, l.link
+        FROM contas c JOIN links l ON l.conta_id = c.id
+        WHERE c.data LIKE ? ORDER BY c.id DESC, l.plataforma
+    """, (mes_str + "-%",))
+    rows = cur.fetchall()
+    con.close()
+    return rows
+
+def limpar_tudo():
+    con = sqlite3.connect(DB_FILE)
+    cur = con.cursor()
+    cur.execute("DELETE FROM links")
+    cur.execute("DELETE FROM contas")
+    con.commit()
+    con.close()
+
 def buscar_todos_links(data_str=None):
     con = sqlite3.connect(DB_FILE)
     cur = con.cursor()
@@ -207,10 +228,12 @@ def _emoji_curto(p):
 def teclado_menu_principal():
     mu = types.InlineKeyboardMarkup(row_width=1)
     mu.add(
-        types.InlineKeyboardButton("🔍 Buscar links (cookie)", callback_data="menu_buscar"),
-        types.InlineKeyboardButton("📋 Ver links salvos",       callback_data="menu_salvos"),
-        types.InlineKeyboardButton("📄 Exportar tudo do dia",   callback_data="menu_exportar"),
-        types.InlineKeyboardButton("🗑️ Limpar links do dia",    callback_data="menu_limpar"),
+        types.InlineKeyboardButton("🔍 Buscar links (cookie)",  callback_data="menu_buscar"),
+        types.InlineKeyboardButton("📋 Ver links salvos",        callback_data="menu_salvos"),
+        types.InlineKeyboardButton("📄 Exportar tudo do dia",    callback_data="menu_exportar"),
+        types.InlineKeyboardButton("📦 Exportar tudo do mês",    callback_data="menu_exportar_mes"),
+        types.InlineKeyboardButton("🗑️ Limpar links do dia",     callback_data="menu_limpar"),
+        types.InlineKeyboardButton("💣 Limpar TUDO",             callback_data="menu_limpar_tudo"),
     )
     return mu
 
@@ -415,6 +438,36 @@ def cb_data_plat(call):
     e, c = _emoji_curto(plat)
     bot.send_document(call.message.chat.id, buf,
         caption=f"{e} {c} — {label} — {len(linhas)} link(s)")
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "menu_exportar_mes")
+def cb_exportar_mes(call):
+    mes = datetime.now().strftime("%Y-%m")
+    mes_label = datetime.now().strftime("%m/%Y")
+    rows = buscar_todos_links_mes(mes)
+    bot.answer_callback_query(call.id)
+    if not rows:
+        bot.send_message(call.message.chat.id, "Nenhum link salvo este mês.")
+        return
+    _enviar_bloco_db(call.message.chat.id, rows, mes_label.replace("/", "_"))
+
+@bot.callback_query_handler(func=lambda c: c.data == "menu_limpar_tudo")
+def cb_menu_limpar_tudo(call):
+    mu = types.InlineKeyboardMarkup(row_width=2)
+    mu.add(
+        types.InlineKeyboardButton("✅ Sim, apagar TUDO", callback_data="confirmar_limpar_tudo"),
+        types.InlineKeyboardButton("❌ Cancelar",         callback_data="menu_inicio"),
+    )
+    bot.edit_message_text("💣 Apagar *TODOS* os links do banco?\n\nIsso não tem volta.",
+                          chat_id=call.message.chat.id, message_id=call.message.message_id,
+                          parse_mode="Markdown", reply_markup=mu)
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "confirmar_limpar_tudo")
+def cb_confirmar_limpar_tudo(call):
+    limpar_tudo()
+    bot.edit_message_text("✅ Banco limpo. Todos os links apagados.",
+                          chat_id=call.message.chat.id, message_id=call.message.message_id)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda c: c.data == "menu_limpar")
