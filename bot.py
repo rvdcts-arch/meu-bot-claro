@@ -156,6 +156,19 @@ def limpar_tudo():
     con.commit()
     con.close()
 
+def buscar_links_plataforma_tudo(plataforma):
+    con = sqlite3.connect(DB_FILE)
+    cur = con.cursor()
+    cur.execute("""
+        SELECT c.credencial, l.link
+        FROM contas c JOIN links l ON l.conta_id = c.id
+        WHERE l.plataforma = ?
+        ORDER BY c.data DESC, c.id DESC
+    """, (plataforma,))
+    rows = cur.fetchall()
+    con.close()
+    return rows
+
 def buscar_todos_links(data_str=None):
     con = sqlite3.connect(DB_FILE)
     cur = con.cursor()
@@ -228,13 +241,24 @@ def _emoji_curto(p):
 def teclado_menu_principal():
     mu = types.InlineKeyboardMarkup(row_width=1)
     mu.add(
-        types.InlineKeyboardButton("🔍 Buscar links (cookie)",  callback_data="menu_buscar"),
-        types.InlineKeyboardButton("📋 Ver links salvos",        callback_data="menu_salvos"),
-        types.InlineKeyboardButton("📄 Exportar tudo do dia",    callback_data="menu_exportar"),
-        types.InlineKeyboardButton("📦 Exportar tudo do mês",    callback_data="menu_exportar_mes"),
-        types.InlineKeyboardButton("🗑️ Limpar links do dia",     callback_data="menu_limpar"),
-        types.InlineKeyboardButton("💣 Limpar TUDO",             callback_data="menu_limpar_tudo"),
+        types.InlineKeyboardButton("🔍 Buscar links (cookie)",        callback_data="menu_buscar"),
+        types.InlineKeyboardButton("📋 Ver links salvos",              callback_data="menu_salvos"),
+        types.InlineKeyboardButton("📄 Exportar tudo do dia",          callback_data="menu_exportar"),
+        types.InlineKeyboardButton("📦 Exportar tudo do mês",          callback_data="menu_exportar_mes"),
+        types.InlineKeyboardButton("🎯 Exportar por plataforma (tudo)", callback_data="menu_exportar_plat"),
+        types.InlineKeyboardButton("🗑️ Limpar links do dia",         callback_data="menu_limpar"),
+        types.InlineKeyboardButton("💣 Limpar TUDO",                 callback_data="menu_limpar_tudo"),
     )
+    return mu
+
+def teclado_plataformas_export():
+    mu = types.InlineKeyboardMarkup(row_width=3)
+    bts = []
+    for p in PARCEIROS:
+        e, c = _emoji_curto(p)
+        bts.append(types.InlineKeyboardButton(f"{e} {c}", callback_data=f"ep:{p}"))
+    mu.add(*bts)
+    mu.add(types.InlineKeyboardButton("◀️ Início", callback_data="menu_inicio"))
     return mu
 
 def teclado_datas_menu():
@@ -439,6 +463,29 @@ def cb_data_plat(call):
     bot.send_document(call.message.chat.id, buf,
         caption=f"{e} {c} — {label} — {len(linhas)} link(s)")
     bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda c: c.data == "menu_exportar_plat")
+def cb_exportar_plat_menu(call):
+    bot.edit_message_text("🎯 Escolha a plataforma:",
+                          chat_id=call.message.chat.id, message_id=call.message.message_id,
+                          reply_markup=teclado_plataformas_export())
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("ep:"))
+def cb_exportar_plat(call):
+    plat = call.data.split(":", 1)[1]
+    rows = buscar_links_plataforma_tudo(plat)
+    bot.answer_callback_query(call.id)
+    if not rows:
+        bot.send_message(call.message.chat.id, f"Nenhum link de {NOMES.get(plat, plat)} no banco.")
+        return
+    linhas = [f"{cred} > {link}" for (cred, link) in rows]
+    conteudo = "\n".join(linhas)
+    buf = io.BytesIO(conteudo.encode("utf-8"))
+    buf.name = f"{plat.lower()}_tudo.txt"
+    e, c = _emoji_curto(plat)
+    bot.send_document(call.message.chat.id, buf,
+        caption=f"{e} {c} — todos os registros — {len(linhas)} link(s)")
 
 @bot.callback_query_handler(func=lambda c: c.data == "menu_exportar_mes")
 def cb_exportar_mes(call):
