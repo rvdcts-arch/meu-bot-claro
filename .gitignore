@@ -1,0 +1,5 @@
+.env
+claro.db
+*.zip
+.venv/
+__pycache__/
